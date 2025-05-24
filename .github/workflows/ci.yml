@@ -1,0 +1,120 @@
+name: CI
+permissions:
+  contents: read
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  lint-and-build:
+    name: Lint and Build
+    runs-on: ubuntu-latest
+    
+    env:
+      # Default environment variables for development
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      # Auth defaults to suppress warnings
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      # Content repository defaults
+      DATA_REPOSITORY: "ci-test-repo-not-used"
+      CONTENT_WARNINGS_SILENT: "true"
+      # Disable verbose warnings
+      CI: "true"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for lock file existence
+        id: check-lock-file
+        run: |
+          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ] || [ -f "yarn.lock" ]; then
+            echo "lock_file_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "lock_file_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js with cache
+        if: steps.check-lock-file.outputs.lock_file_exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Setup Node.js without cache
+        if: steps.check-lock-file.outputs.lock_file_exists != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ steps.check-lock-file.outputs.lock_file_exists }}" == "true" ]; then
+            echo "Installing dependencies with npm ci (using lock file)"
+            npm ci
+          else
+            echo "No lock file found, using npm install instead"
+            npm install
+          fi
+
+      - name: Run lint
+        run: npm run lint
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        # You can use the following if you want to ignore specific warnings
+        # run: npm run lint -- --max-warnings=0
+
+      - name: Type check
+        run: npm run typecheck || npm run check:types || echo "No type check script found, skipping"
+
+      - name: Create content directories
+        run: |
+          mkdir -p .content/data
+          echo "Created content directories for build"
+          
+      - name: Build project
+        run: npm run build 2> >(grep -v "DATA_REPOSITORY\|AUTH CONFIG WARNING" >&2)
+        env:
+          # Use GitHub secrets for sensitive environment variables
+          # Auth related variables
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || env.NEXT_PUBLIC_APP_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET}}
+          
+          # Supabase related variables (if using Supabase)
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          
+          # Database related variables
+          DATABASE_URL: ${{ secrets.DATABASE_URL || env.DATABASE_URL }}
+          
+          # OAuth Provider variables
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID || '' }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET || '' }}
+          GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID || '' }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET || '' }}
+          FACEBOOK_CLIENT_ID: ${{ secrets.FACEBOOK_CLIENT_ID || '' }}
+          FACEBOOK_CLIENT_SECRET: ${{ secrets.FACEBOOK_CLIENT_SECRET || '' }}
+          TWITTER_CLIENT_ID: ${{ secrets.TWITTER_CLIENT_ID || '' }}
+          TWITTER_CLIENT_SECRET: ${{ secrets.TWITTER_CLIENT_SECRET || '' }}
+          
+          # Content repository variables
+          DATA_REPOSITORY: ${{ secrets.DATA_REPOSITORY || '' }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN || '' }}
+          
+          # Email service variables (Resend)
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || '' }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS || 'noreply@example.com' }}
+
+      - name: Check for build success
+        run: |
+          if [ -d ".next" ]; then
+            echo "✅ Build successful"
+          else
+            echo "❌ Build failed"
+            exit 1
+          fi

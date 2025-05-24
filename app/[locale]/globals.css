@@ -6,6 +6,23 @@
   :root {
     --background: #ffffff;
     --foreground: #171717;
+    
+    --dark-theme: #111827;
+    --dark-theme-50: #f9fafb;
+    --dark-theme-100: #f3f4f6;
+    --dark-theme-200: #e5e7eb;
+    --dark-theme-300: #d1d5db;
+    --dark-theme-400: #9ca3af;
+    --dark-theme-500: #6b7280;
+    --dark-theme-600: #4b5563;
+    --dark-theme-700: #374151;
+    --dark-theme-800: #1f2937;
+    --dark-theme-900: #111827;
+    --dark-theme-950: #0c1322;
+    
+    --light-theme-light: #fff;
+    --light-theme: #f7f7f8;
+    --light-theme-dark: #E7E7EA;
   }
 
   .dark {
@@ -21,3 +38,26 @@
     font-family: Arial, Helvetica, sans-serif;
   }
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in > * {
+  animation: fadeIn 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-fade-in > *:nth-child(1) { animation-delay: 0.05s; }
+.animate-fade-in > *:nth-child(2) { animation-delay: 0.1s; }
+.animate-fade-in > *:nth-child(3) { animation-delay: 0.15s; }
+.animate-fade-in > *:nth-child(4) { animation-delay: 0.2s; }
+.animate-fade-in > *:nth-child(5) { animation-delay: 0.25s; }
+.animate-fade-in > *:nth-child(n + 6) { animation-delay: 0.3s; }
